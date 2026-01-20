@@ -34,6 +34,7 @@
 
     .app{
       width:min(1100px, 100%);
+      height: min(700px, 100%);
       display:grid;
       grid-template-columns: 1.1fr .9fr;
       gap: 18px;
@@ -134,6 +135,21 @@
       z-index: 4;
       box-shadow: 0 20px 50px rgba(0,0,0,.35);
       backdrop-filter: blur(10px);
+      cursor: pointer;
+      transition: all .2s ease;
+    }
+    .hub:hover:not(.disabled){
+      background: radial-gradient(circle at 30% 30%, rgba(255,121,0,.25), rgba(11,62,96,.4));
+      border-color: rgba(255,121,0,.4);
+      transform: scale(1.05);
+      box-shadow: 0 24px 60px rgba(0,0,0,.4);
+    }
+    .hub:active:not(.disabled){
+      transform: scale(0.98);
+    }
+    .hub.disabled{
+      cursor: not-allowed;
+      opacity: 0.6;
     }
     .hub .label{
       font-size: 11px;
@@ -515,7 +531,7 @@
           <div class="wheel-area" aria-label="ruleta">
             <div class="pointer" aria-hidden="true"></div>
             <canvas id="wheel" width="600" height="600"></canvas>
-            <div class="hub">
+            <div class="hub" id="hub" role="button" aria-label="Girar ruleta">
               <div class="label">Siguiente persona</div>
               <div class="value" id="nextPerson">—</div>
             </div>
@@ -697,7 +713,7 @@
         return `
           <div class="history-item">
             <div class="history-item-header">
-              <span>Sesión ${history.indexOf(session) + 1}</span>
+              <span>Sesión ${history.length - history.indexOf(session)}</span>
               <span class="history-item-date">${session.date}</span>
             </div>
             <div class="history-item-assignments">${assignmentsHtml}</div>
@@ -859,9 +875,17 @@
       draftOrderEl.textContent = `Orden de selección: ${assignments.length ? PEOPLE.join(", ") : peopleQueue.join(", ")}`;
 
       // You can spin even when roles are gone, but it will assign "Unassigned"
-      spinBtn.disabled = spinning || peopleQueue.length === 0;
-      assignAllBtn.disabled = spinning || peopleQueue.length === 0;
+      const canSpin = !spinning && peopleQueue.length > 0;
+      spinBtn.disabled = !canSpin;
+      assignAllBtn.disabled = !canSpin;
       saveHistoryBtn.disabled = spinning || assignments.length === 0;
+      
+      // Update hub state
+      if(canSpin){
+        hubEl.classList.remove('disabled');
+      } else {
+        hubEl.classList.add('disabled');
+      }
     }
 
     function renderAssignments(){
@@ -905,7 +929,8 @@
 
     // --- Spin animation ---
     function animateSpin(targetRole){
-      spinning = true;
+      // spinning is already set to true in spinOnce
+      // Just update HUD to reflect disabled state
       updateHUD();
 
       // If targetRole is null (no roles left), just do a quick “tick” animation
@@ -965,11 +990,18 @@
     }
 
     async function spinOnce(){
-      if(spinning) return;
+      if(spinning) {
+        console.log("Already spinning, ignoring click");
+        return;
+      }
       if(peopleQueue.length === 0){
         setStatus("Todas las personas procesadas.");
         return;
       }
+
+      // Set spinning state immediately to prevent double-clicks
+      spinning = true;
+      updateHUD();
 
       // Unique role or null
       const role = pickUniqueRoleOrNull();
@@ -1051,6 +1083,7 @@
     }
 
     // --- UI Elements ---
+    const hubEl = document.getElementById("hub");
     const saveHistoryBtn = document.getElementById("saveHistoryBtn");
     const clearHistoryBtn = document.getElementById("clearHistoryBtn");
     const exportHistoryBtn = document.getElementById("exportHistoryBtn");
@@ -1065,6 +1098,13 @@
     spinBtn.addEventListener("click", spinOnce);
     assignAllBtn.addEventListener("click", assignAll);
     resetBtn.addEventListener("click", reset);
+    hubEl.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if(!spinning && peopleQueue.length > 0){
+        spinOnce();
+      }
+    });
     saveHistoryBtn.addEventListener("click", saveHistory);
     clearHistoryBtn.addEventListener("click", clearHistory);
     exportHistoryBtn.addEventListener("click", exportHistory);
