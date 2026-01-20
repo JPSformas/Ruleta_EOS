@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Ruleta de Roles</title>
+  <title>Ruleta de Roles EOS L10</title>
   <style>
     :root{
       --primary: #0b3e60;
@@ -317,6 +317,28 @@
       margin-top: 14px;
       padding-top: 14px;
       border-top: 1px solid rgba(255,121,0,.15);
+      max-height: 250px;
+      overflow-y: auto;
+      padding-right: 4px;
+      /* Firefox scrollbar */
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,121,0,.4) rgba(11,62,96,.2);
+    }
+    /* Custom Scrollbar Styling for Webkit browsers (Chrome, Safari, Edge) */
+    .history-stats::-webkit-scrollbar{
+      width: 8px;
+    }
+    .history-stats::-webkit-scrollbar-track{
+      background: rgba(11,62,96,.2);
+      border-radius: 4px;
+    }
+    .history-stats::-webkit-scrollbar-thumb{
+      background: rgba(255,121,0,.4);
+      border-radius: 4px;
+      border: 1px solid rgba(255,121,0,.2);
+    }
+    .history-stats::-webkit-scrollbar-thumb:hover{
+      background: rgba(255,121,0,.6);
     }
     .stat-row{
       display:flex;
@@ -338,6 +360,59 @@
     button.small{
       padding: 6px 12px;
       font-size: 12px;
+    }
+
+    .person-stat-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 5px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,121,0,.2);
+      background: rgba(11,62,96,.15);
+      cursor: pointer;
+      transition: all .15s ease;
+      user-select: none;
+    }
+    .person-stat-header:hover{
+      background: rgba(11,62,96,.25);
+      border-color: rgba(255,121,0,.3);
+    }
+    .person-stat-header .person-name{
+      font-weight: 600;
+      color: var(--text);
+      font-size: 13px;
+    }
+    .person-stat-header .person-summary{
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: 8px;
+    }
+    .person-stat-header .expand-icon{
+      color: var(--accent);
+      font-size: 14px;
+      transition: transform .2s ease;
+    }
+    .person-stat-header.expanded .expand-icon{
+      transform: rotate(90deg);
+    }
+    .person-stat-content{
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height .3s ease;
+      padding: 0 12px;
+    }
+    .person-stat-content.expanded{
+      max-height: 500px;
+      padding: 8px 12px 0px 12px;
+    }
+    .person-stat-content .stat-row{
+      padding: 4px 0;
+      font-size: 11px;
+      border-bottom: 1px solid rgba(255,121,0,.08);
+    }
+    .person-stat-content .stat-row:last-child{
+      border-bottom: none;
     }
 
     .nav-tabs{
@@ -385,6 +460,39 @@
     .page-view.active{
       display: block;
     }
+    
+    @media (max-width: 768px){
+      body{
+        padding: 16px;
+      }
+
+      .wheel-area{
+        width: 100%;
+      }
+
+      .controls{
+        width: 100%;
+        gap: 8px;
+        justify-content: stretch;
+      }
+
+      .controls button{
+        flex: 1 1 calc(50% - 4px);
+        min-width: 0;
+        padding: 12px 10px;
+        font-size: 13px;
+      }
+
+      .controls button.primary{
+        flex: 1 1 100%;
+        order: -1;
+      }
+
+      .controls #saveHistoryBtn{
+        flex: 1 1 100%;
+        margin-top: 4px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -417,7 +525,7 @@
             <button class="primary" id="spinBtn">Girar</button>
             <button id="assignAllBtn">Asignar todos</button>
             <button id="resetBtn">Reiniciar</button>
-            <button id="saveHistoryBtn" class="small">Guardar sesión</button>
+            <button id="saveHistoryBtn">Guardar sesión</button>
           </div>
 
           <div class="status" id="status"></div>
@@ -468,7 +576,7 @@
   </div>
 
   <script>
-    const PEOPLE = ["Eli", "Lara", "Ro", "Toto", "Ciro", "JP"];
+    const PEOPLE = ["Eli", "Lara", "Ro", "Toto", "Ciro", "JP", "Romi"];
     const ROLES  = ["Policia", "House keeping", "Notario", "Anfitrion"];
 
     function shuffle(arr){
@@ -599,22 +707,69 @@
 
       // Render statistics
       const stats = calculateStats(history);
+      
+      // Organize person-role stats by person
+      const personStats = {};
+      Object.entries(stats.personRoleCounts).forEach(([key, count]) => {
+        const [person, role] = key.split('-');
+        if(!personStats[person]){
+          personStats[person] = {};
+        }
+        personStats[person][role] = count;
+      });
+
       const statsHtml = `
-        <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--accent);">Estadísticas</div>
-        <div class="stat-row">
-          <span class="stat-label">Total de sesiones:</span>
-          <span class="stat-value">${stats.totalSessions}</span>
-        </div>
-        ${Object.entries(stats.roleCounts)
-          .sort((a, b) => b[1] - a[1])
-          .map(([role, count]) => `
-            <div class="stat-row">
-              <span class="stat-label">${role}:</span>
-              <span class="stat-value">${count} vez${count !== 1 ? 'es' : ''}</span>
+        <div style="font-size: 13px; font-weight: 700; margin-bottom: 12px; color: var(--accent);">Estadísticas por Persona</div>
+        ${PEOPLE.map((person, index) => {
+          const roles = personStats[person] || {};
+          const roleEntries = Object.entries(roles).sort((a, b) => b[1] - a[1]);
+          const totalRoles = roleEntries.reduce((sum, [, count]) => sum + count, 0);
+          
+          const summary = roleEntries.length === 0 
+            ? 'Sin asignaciones aún'
+            : `${totalRoles} ${totalRoles !== 1 ? 'asignaciones' : 'asignación'} en ${roleEntries.length} ${roleEntries.length !== 1 ? 'roles' : 'rol'}`;
+          
+          return `
+            <div class="person-stat-item" style="margin-bottom: 8px;">
+              <div class="person-stat-header" data-person-index="${index}">
+                <div style="display:flex; align-items:center;">
+                  <span class="person-name">${person}</span>
+                  <span class="person-summary">${summary}</span>
+                </div>
+                <span class="expand-icon">▶</span>
+              </div>
+              <div class="person-stat-content" data-person-index="${index}">
+                ${roleEntries.length === 0 ? `
+                  <div style="font-size: 11px; color: var(--muted); padding: 8px 0;">Sin asignaciones aún</div>
+                ` : roleEntries.map(([role, count]) => `
+                  <div class="stat-row">
+                    <span class="stat-label">${role}:</span>
+                    <span class="stat-value">${count} ${count !== 1 ? 'veces' : 'vez'}</span>
+                  </div>
+                `).join('')}
+              </div>
             </div>
-          `).join('')}
+          `;
+        }).join('')}
       `;
       historyStatsEl.innerHTML = statsHtml;
+      
+      // Add click handlers for expand/collapse
+      document.querySelectorAll('.person-stat-header').forEach(header => {
+        header.addEventListener('click', function(){
+          const index = this.dataset.personIndex;
+          const content = document.querySelector(`.person-stat-content[data-person-index="${index}"]`);
+          const isExpanded = content.classList.contains('expanded');
+          
+          if(isExpanded){
+            content.classList.remove('expanded');
+            this.classList.remove('expanded');
+          } else {
+            content.classList.add('expanded');
+            this.classList.add('expanded');
+          }
+        });
+      });
     }
 
     // --- Canvas wheel drawing ---
