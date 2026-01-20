@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Ruleta de Roles</title>
+  <style>
+    :root{
+      --primary: #0b3e60;
+      --accent: #ff7900;
+      --bg: #0a1a2a;
+      --panel: rgba(11,62,96,.25);
+      --text:#eaf0ff;
+      --muted: rgba(234,240,255,.75);
+      --ring: rgba(255,121,0,.2);
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+      --radius: 20px;
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      color:var(--text);
+      background:
+        radial-gradient(900px 600px at 20% 10%, rgba(71, 137, 180, 0.15), transparent 60%),
+        radial-gradient(900px 600px at 80% 30%, rgba(255, 119, 0, 0.15), transparent 60%),
+        radial-gradient(900px 600px at 40% 90%, rgba(90, 126, 150, 0.15), transparent 60%),
+        var(--bg);
+      padding: 32px 16px;
+    }
+
+    .app{
+      width:min(1100px, 100%);
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 18px;
+    }
+    @media (max-width: 900px){
+      .app{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      /*background: linear-gradient(180deg, var(--panel), rgba(11,62,96,.15));*/
+      border: 1px solid var(--ring);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .card-header{
+      padding: 18px 18px 0 18px;
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap: 12px;
+    }
+    .logo-container{
+      display:flex;
+      align-items:center;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+    .logo{
+      height: 48px;
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,.3));
+    }
+    .title{
+      margin:0;
+      font-size: 22px;
+      letter-spacing: .2px;
+    }
+    .subtitle{
+      margin:6px 0 0 0;
+      color:var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .content{ padding: 18px; }
+
+    .roulette-wrap{
+      display:grid;
+      gap: 14px;
+      place-items:center;
+      padding: 10px 0 4px;
+    }
+
+    .wheel-area{
+      position: relative;
+      width: min(380px, 92vw);
+      aspect-ratio: 1 / 1;
+      display:grid;
+      place-items:center;
+    }
+
+    .pointer{
+      position:absolute;
+      top:-6px;
+      left:50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 14px solid transparent;
+      border-right: 14px solid transparent;
+      border-bottom: 22px solid var(--accent);
+      filter: drop-shadow(0 10px 18px rgba(0,0,0,.45));
+      z-index: 5;
+    }
+
+    canvas{
+      width: 100%;
+      height: 100%;
+      border-radius: 999px;
+      background: rgba(11,62,96,.2);
+      border: 1px solid var(--ring);
+      box-shadow: inset 0 0 0 10px rgba(11,62,96,.15), 0 24px 60px rgba(0,0,0,.35);
+    }
+
+    .hub{
+      position:absolute;
+      width: 118px;
+      height: 118px;
+      border-radius: 999px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,121,0,.15), rgba(11,62,96,.3));
+      border: 1px solid rgba(255,121,0,.25);
+      display:grid;
+      place-items:center;
+      text-align:center;
+      padding: 10px;
+      z-index: 4;
+      box-shadow: 0 20px 50px rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+    }
+    .hub .label{
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 6px;
+      letter-spacing: .35px;
+      text-transform: uppercase;
+    }
+    .hub .value{
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 1.15;
+    }
+
+    .controls{
+      width: min(520px, 100%);
+      display:flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content:center;
+      margin-top: 6px;
+    }
+    button{
+      appearance:none;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.08);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 11px 14px;
+      font-weight: 700;
+      cursor:pointer;
+      transition: transform .08s ease, background .15s ease, border-color .15s ease;
+      backdrop-filter: blur(10px);
+    }
+    button:hover{ background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.22); }
+    button:active{ transform: translateY(1px) scale(.99); }
+    button.primary{
+      background: rgba(255,121,0,.22);
+      border-color: rgba(255,121,0,.4);
+      color: #fff;
+    }
+    button.primary:hover{
+      background: rgba(255,121,0,.32);
+      border-color: rgba(255,121,0,.55);
+    }
+    button:disabled{
+      opacity:.55;
+      cursor:not-allowed;
+    }
+
+    .status{
+      text-align:center;
+      color: var(--muted);
+      font-size: 13px;
+      min-height: 18px;
+      margin-top: 4px;
+    }
+
+    .list{
+      display:grid;
+      gap: 10px;
+    }
+    .pill{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap: 12px;
+      padding: 12px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,121,0,.2);
+      background: rgba(11,62,96,.15);
+    }
+    .pill strong{ font-size: 14px; }
+    .pill .role{
+      font-weight: 800;
+      color: var(--accent);
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,121,0,.3);
+      background: rgba(255,121,0,.15);
+      white-space: nowrap;
+    }
+    .pill .role.muted{
+      color: rgba(234,240,255,.65);
+      font-weight: 700;
+      background: rgba(11,62,96,.2);
+      border-color: rgba(255,121,0,.15);
+    }
+
+    .mini{
+      display:flex;
+      flex-wrap:wrap;
+      gap: 8px;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255,121,0,.15);
+    }
+    .tag{
+      font-size: 12px;
+      color: var(--muted);
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,121,0,.2);
+      background: rgba(11,62,96,.2);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="card">
+      <div class="card-header">
+        <div style="width:100%;">
+          <div class="logo-container">
+            <img src="EOS_MstrBlog_10HireImplementer.jpg" alt="EOS Logo" class="logo">
+            <h1 class="title" style="margin:0;">Ruleta de Roles EOS L10</h1>
+          </div>
+          <p class="subtitle">
+            El orden de las personas es aleatorio. Los roles nunca se repiten. Cuando se acaban los roles, las personas restantes permanecen sin asignar.
+          </p>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="roulette-wrap">
+          <div class="wheel-area" aria-label="ruleta">
+            <div class="pointer" aria-hidden="true"></div>
+            <canvas id="wheel" width="600" height="600"></canvas>
+            <div class="hub">
+              <div class="label">Siguiente persona</div>
+              <div class="value" id="nextPerson">—</div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button class="primary" id="spinBtn">Girar</button>
+            <button id="assignAllBtn">Asignar todos</button>
+            <button id="resetBtn">Reiniciar</button>
+          </div>
+
+          <div class="status" id="status"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="title" style="font-size:18px; margin-top:2px;">Asignaciones</h2>
+          <p class="subtitle">Cuando se acaban los roles, el resto permanece sin asignar.</p>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="list" id="assignments"></div>
+
+        <div class="mini">
+          <div class="tag" id="remainingPeople"></div>
+          <div class="tag" id="remainingRoles"></div>
+          <div class="tag" id="draftOrder"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const PEOPLE = ["Eli", "Lara", "Ro", "Toto", "Ciro", "JP"];
+    const ROLES  = ["Policia", "House keeping", "Notario", "Anfitrion"];
+
+    function shuffle(arr){
+      const a = [...arr];
+      for (let i = a.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    // --- State ---
+    let peopleQueue = [];
+    let remainingRoles = [];
+    let assignments = []; // {person, role|null}
+
+    let spinning = false;
+
+    // --- Canvas wheel drawing ---
+    const canvas = document.getElementById("wheel");
+    const ctx = canvas.getContext("2d");
+    const W = canvas.width, H = canvas.height;
+    const cx = W/2, cy = H/2;
+    const radius = Math.min(W,H) * 0.47;
+
+    let rotation = 0;
+
+    function drawWheel(){
+      ctx.clearRect(0,0,W,H);
+
+      const segments = ROLES.length;
+      const angle = (Math.PI * 2) / segments;
+
+      for(let i=0;i<segments;i++){
+        const start = rotation + i*angle;
+        const end = start + angle;
+
+        // Dim roles already assigned (not in remainingRoles)
+        const isAvailable = remainingRoles.includes(ROLES[i]);
+        const alpha = isAvailable ? (i % 2 === 0 ? 0.16 : 0.10) : 0.04;
+
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radius, start, end);
+        ctx.closePath();
+        const fillColor = isAvailable 
+          ? (i % 2 === 0 ? `rgba(11,62,96,${alpha * 2})` : `rgba(11,62,96,${alpha * 1.5})`)
+          : `rgba(11,62,96,${alpha})`;
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+
+        ctx.strokeStyle = isAvailable ? "rgba(255,121,0,.25)" : "rgba(255,121,0,.1)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const mid = (start + end) / 2;
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(mid);
+        ctx.textAlign = "right";
+        ctx.fillStyle = isAvailable ? "rgba(255,121,0,.95)" : "rgba(255,121,0,.4)";
+        ctx.font = "800 22px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial";
+        ctx.fillText(ROLES[i], radius - 18, 8);
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI*2);
+      ctx.strokeStyle = "rgba(255,121,0,.3)";
+      ctx.lineWidth = 6;
+      ctx.stroke();
+    }
+
+    function roleAtPointer(){
+      const segments = ROLES.length;
+      const angle = (Math.PI * 2) / segments;
+      const pointerAngle = -Math.PI / 2;
+
+      let a = pointerAngle - rotation;
+      a = ((a % (Math.PI*2)) + (Math.PI*2)) % (Math.PI*2);
+
+      const idx = Math.floor(a / angle);
+      return ROLES[idx];
+    }
+
+    // --- UI ---
+    const spinBtn = document.getElementById("spinBtn");
+    const assignAllBtn = document.getElementById("assignAllBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const statusEl = document.getElementById("status");
+    const nextPersonEl = document.getElementById("nextPerson");
+    const assignmentsEl = document.getElementById("assignments");
+    const remainingPeopleEl = document.getElementById("remainingPeople");
+    const remainingRolesEl = document.getElementById("remainingRoles");
+    const draftOrderEl = document.getElementById("draftOrder");
+
+    function setStatus(msg){ statusEl.textContent = msg || ""; }
+
+    function updateHUD(){
+      nextPersonEl.textContent = peopleQueue[0] ?? "—";
+      remainingPeopleEl.textContent = `Personas restantes: ${peopleQueue.length}`;
+      remainingRolesEl.textContent = `Roles restantes: ${remainingRoles.length}`;
+      draftOrderEl.textContent = `Orden de selección: ${assignments.length ? PEOPLE.join(", ") : peopleQueue.join(", ")}`;
+
+      // You can spin even when roles are gone, but it will assign "Unassigned"
+      spinBtn.disabled = spinning || peopleQueue.length === 0;
+      assignAllBtn.disabled = spinning || peopleQueue.length === 0;
+    }
+
+    function renderAssignments(){
+      assignmentsEl.innerHTML = "";
+      if(assignments.length === 0){
+        const empty = document.createElement("div");
+        empty.className = "pill";
+        empty.innerHTML = `<span style="color: rgba(234,240,255,.72);">Aún no hay asignaciones.</span><span class="role muted">—</span>`;
+        assignmentsEl.appendChild(empty);
+        return;
+      }
+
+      for(const a of assignments){
+        const row = document.createElement("div");
+        row.className = "pill";
+        row.innerHTML = `
+          <strong>${a.person}</strong>
+          <span class="role ${a.role ? "" : "muted"}">${a.role ?? "Espectador"}</span>
+        `;
+        assignmentsEl.appendChild(row);
+      }
+    }
+
+    // --- Assignment logic (NO role repeats) ---
+    function pickUniqueRoleOrNull(){
+      if(remainingRoles.length === 0) return null;
+      const idx = Math.floor(Math.random() * remainingRoles.length);
+      const role = remainingRoles[idx];
+      remainingRoles.splice(idx, 1);
+      return role;
+    }
+
+    function assignCurrentPerson(roleOrNull){
+      const person = peopleQueue.shift();
+      assignments.push({ person, role: roleOrNull });
+      setStatus(roleOrNull ? `${person} → ${roleOrNull}` : `${person} → Espectador (no quedan roles)`);
+      renderAssignments();
+      drawWheel();
+      updateHUD();
+    }
+
+    // --- Spin animation ---
+    function animateSpin(targetRole){
+      spinning = true;
+      updateHUD();
+
+      // If targetRole is null (no roles left), just do a quick “tick” animation
+      if(!targetRole){
+        const startRot = rotation;
+        const endRot = rotation - (Math.PI * 2) * 1.2;
+        const duration = 650;
+        const start = performance.now();
+        const easeOut = t => 1 - Math.pow(1 - t, 3);
+
+        return new Promise(resolve=>{
+          function frame(now){
+            const t = Math.min(1, (now - start) / duration);
+            rotation = startRot + (endRot - startRot) * easeOut(t);
+            drawWheel();
+            if(t < 1) requestAnimationFrame(frame);
+            else { spinning = false; updateHUD(); resolve(); }
+          }
+          requestAnimationFrame(frame);
+        });
+      }
+
+      const segments = ROLES.length;
+      const angle = (Math.PI * 2) / segments;
+      const targetIndex = ROLES.indexOf(targetRole);
+      const pointerAngle = -Math.PI/2;
+
+      const desiredRotation = pointerAngle - (targetIndex + 0.5) * angle;
+
+      const extraSpins = 5 + Math.floor(Math.random()*3);
+      const startRotation = rotation;
+      const endRotation = desiredRotation - extraSpins * 2*Math.PI;
+
+      const duration = 1400 + Math.floor(Math.random()*700);
+      const start = performance.now();
+      const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+
+      return new Promise(resolve=>{
+        function frame(now){
+          const t = Math.min(1, (now - start) / duration);
+          const e = easeOutCubic(t);
+          rotation = startRotation + (endRotation - startRotation) * e;
+          drawWheel();
+
+          if(t < 1){
+            requestAnimationFrame(frame);
+          } else {
+            rotation = desiredRotation; // snap
+            drawWheel();
+            spinning = false;
+            updateHUD();
+            resolve();
+          }
+        }
+        requestAnimationFrame(frame);
+      });
+    }
+
+    async function spinOnce(){
+      if(spinning) return;
+      if(peopleQueue.length === 0){
+        setStatus("Todas las personas procesadas.");
+        return;
+      }
+
+      // Unique role or null
+      const role = pickUniqueRoleOrNull();
+      setStatus("Girando…");
+      await animateSpin(role);
+
+      // If a role exists, the wheel is snapped to it; read for display (safety)
+      const landed = role ? roleAtPointer() : null;
+
+      // Guarantee no repeats: if for any reason landed differs, use the picked role
+      assignCurrentPerson(role ? (landed === role ? landed : role) : null);
+    }
+
+    async function assignAll(){
+      while(peopleQueue.length > 0){
+        await spinOnce();
+      }
+    }
+
+    function reset(){
+      spinning = false;
+
+      // Randomize draft order (this satisfies "who is first drafted is randomized")
+      peopleQueue = shuffle(PEOPLE);
+
+      // Roles are unique; we keep them all available initially
+      remainingRoles = [...ROLES];
+
+      assignments = [];
+      rotation = 0;
+
+      drawWheel();
+      renderAssignments();
+      setStatus("");
+      updateHUD();
+    }
+
+    // Init
+    reset();
+
+    spinBtn.addEventListener("click", spinOnce);
+    assignAllBtn.addEventListener("click", assignAll);
+    resetBtn.addEventListener("click", reset);
+  </script>
+</body>
+</html>
