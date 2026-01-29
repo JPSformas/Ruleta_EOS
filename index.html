@@ -4,6 +4,51 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Ruleta de Roles EOS L10</title>
+  <!-- Firebase SDK -->
+  <!-- 
+    SETUP REQUIRED: To enable shared history across all users, you need to configure Firebase.
+    See FIREBASE_SETUP.md for detailed instructions.
+    
+    Steps:
+    1. Create a Firebase project at https://console.firebase.google.com/
+    2. Enable Firestore Database
+    3. Get your Firebase config from Project Settings
+    4. Replace the placeholder values below with your actual config
+    5. Set up Firestore security rules (see FIREBASE_SETUP.md)
+    
+    If Firebase is not configured, the app will automatically use localStorage (local only).
+  -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+    
+    // Firebase configuration - REPLACE WITH YOUR OWN CONFIG
+    // Get these values from Firebase Console → Project Settings → Your apps → Web app config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDI70okfmKAXCvoY1P9bdB2n2S37qwxy4w",
+      authDomain: "ruleta-eos.firebaseapp.com",
+      projectId: "ruleta-eos",
+      storageBucket: "ruleta-eos.firebasestorage.app",
+      messagingSenderId: "803760614129",
+      appId: "1:803760614129:web:ecfba84b634c2abba39750"
+    };
+    
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    
+    // Make Firebase functions available globally
+    window.firebaseDb = db;
+    window.firebaseCollection = collection;
+    window.firebaseAddDoc = addDoc;
+    window.firebaseGetDocs = getDocs;
+    window.firebaseQuery = query;
+    window.firebaseOrderBy = orderBy;
+    window.firebaseLimit = limit;
+    window.firebaseDeleteDoc = deleteDoc;
+    window.firebaseDoc = doc;
+    window.firebaseOnSnapshot = onSnapshot;
+  </script>
   <style>
     :root{
       --primary: #0b3e60;
@@ -434,7 +479,6 @@
     .nav-tabs{
       display:flex;
       gap: 8px;
-      margin-bottom: 16px;
       border-bottom: 1px solid rgba(255,121,0,.2);
       padding-bottom: 8px;
     }
@@ -577,6 +621,9 @@
 
         <!-- History View -->
         <div class="page-view" id="historyView">
+          <div id="storageStatus" style="font-size: 11px; color: var(--muted); margin-bottom: 12px; padding: 6px 10px; border-radius: 8px; background: rgba(11,62,96,.2); border: 1px solid rgba(255,121,0,.15);">
+            <span id="storageStatusText">Cargando...</span>
+          </div>
           <div class="history-header">
             <h3 class="history-title" style="margin:0 0 12px 0;">Historial de Sesiones</h3>
             <div style="display:flex; gap:8px; margin-bottom: 16px;">
@@ -613,8 +660,107 @@
 
     // --- History Storage ---
     const STORAGE_KEY = 'ruleta_eos_history';
+    const HISTORY_COLLECTION = 'ruleta_sessions';
+    let firebaseEnabled = false;
+    let historyUnsubscribe = null;
 
-    function loadHistory(){
+    // Check if Firebase is configured
+    function checkFirebaseEnabled(){
+      try {
+        // Check if Firebase is initialized and available
+        return !!(window.firebaseDb && 
+                  window.firebaseCollection && 
+                  window.firebaseAddDoc && 
+                  window.firebaseGetDocs);
+      } catch(e){
+        console.error('Error checking Firebase:', e);
+        return false;
+      }
+    }
+
+    function updateStorageStatus(){
+      const statusEl = document.getElementById('storageStatusText');
+      if(!statusEl) return;
+      
+      if(firebaseEnabled && checkFirebaseEnabled()){
+        statusEl.textContent = '✓ Historial compartido (Firebase) - Todos los usuarios ven el mismo historial';
+        statusEl.parentElement.style.borderColor = 'rgba(76, 175, 80, 0.4)';
+        statusEl.parentElement.style.background = 'rgba(76, 175, 80, 0.1)';
+      } else {
+        statusEl.textContent = '⚠ Historial local - Solo visible en este navegador';
+        statusEl.parentElement.style.borderColor = 'rgba(255, 152, 0, 0.4)';
+        statusEl.parentElement.style.background = 'rgba(255, 152, 0, 0.1)';
+      }
+    }
+
+    // Initialize Firebase listener
+    async function initFirebaseListener(){
+      // Wait a bit for Firebase module to load
+      let attempts = 0;
+      while(!checkFirebaseEnabled() && attempts < 10){
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+      
+      if(!checkFirebaseEnabled()){
+        console.warn('Firebase not available - using localStorage fallback');
+        updateStorageStatus();
+        return;
+      }
+      
+      try {
+        console.log('Initializing Firebase listener...');
+        firebaseEnabled = true;
+        const sessionsRef = window.firebaseCollection(window.firebaseDb, HISTORY_COLLECTION);
+        const q = window.firebaseQuery(sessionsRef, window.firebaseOrderBy('timestamp', 'desc'), window.firebaseLimit(50));
+        
+        // Set up real-time listener
+        historyUnsubscribe = window.firebaseOnSnapshot(q, (snapshot) => {
+          const history = [];
+          snapshot.forEach((doc) => {
+            history.push({ id: doc.id, ...doc.data() });
+          });
+          console.log('Firebase history updated:', history.length, 'sessions');
+          // Update UI if history view is active
+          if(document.getElementById("historyView").classList.contains('active')){
+            renderHistoryFromData(history);
+          }
+        }, (error) => {
+          console.error('Firebase listener error:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          firebaseEnabled = false;
+          updateStorageStatus();
+        });
+        console.log('Firebase listener initialized successfully');
+        updateStorageStatus();
+      } catch(e){
+        console.error('Error initializing Firebase listener:', e);
+        console.error('Error details:', e.message, e.stack);
+        firebaseEnabled = false;
+        updateStorageStatus();
+      }
+    }
+
+    async function loadHistory(){
+      // Try Firebase first
+      if(checkFirebaseEnabled()){
+        try {
+          const sessionsRef = window.firebaseCollection(window.firebaseDb, HISTORY_COLLECTION);
+          const q = window.firebaseQuery(sessionsRef, window.firebaseOrderBy('timestamp', 'desc'), window.firebaseLimit(50));
+          const snapshot = await window.firebaseGetDocs(q);
+          const history = [];
+          snapshot.forEach((doc) => {
+            history.push({ id: doc.id, ...doc.data() });
+          });
+          return history;
+        } catch(e){
+          console.error('Error loading from Firebase:', e);
+          // Fall back to localStorage
+        }
+      }
+      
+      // Fallback to localStorage
       try {
         const stored = localStorage.getItem(STORAGE_KEY);
         return stored ? JSON.parse(stored) : [];
@@ -624,23 +770,54 @@
       }
     }
 
-    function saveHistory(){
+    async function saveHistory(){
+      const session = {
+        timestamp: new Date().toISOString(),
+        date: new Date().toLocaleDateString('es-ES', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        assignments: [...assignments],
+        draftOrder: assignments.length ? PEOPLE.join(", ") : peopleQueue.join(", ")
+      };
+
+      // Try Firebase first
+      const isFirebaseReady = checkFirebaseEnabled();
+      console.log('Firebase check result:', isFirebaseReady);
+      console.log('Firebase objects:', {
+        db: !!window.firebaseDb,
+        collection: !!window.firebaseCollection,
+        addDoc: !!window.firebaseAddDoc
+      });
+      
+      if(isFirebaseReady){
+        try {
+          console.log('Attempting to save to Firebase...');
+          const sessionsRef = window.firebaseCollection(window.firebaseDb, HISTORY_COLLECTION);
+          const docRef = await window.firebaseAddDoc(sessionsRef, session);
+          console.log('Successfully saved to Firebase, doc ID:', docRef.id);
+          setStatus("Sesión guardada en el historial compartido");
+          // Real-time listener will update UI automatically
+          return;
+        } catch(e){
+          console.error('Error saving to Firebase:', e);
+          console.error('Error code:', e.code);
+          console.error('Error message:', e.message);
+          setStatus(`Error al guardar en Firebase (${e.code || e.message}), usando almacenamiento local`);
+          // Fall back to localStorage
+        }
+      } else {
+        console.log('Firebase not enabled, using localStorage');
+      }
+
+      // Fallback to localStorage
       try {
-        const history = loadHistory();
-        const session = {
-          id: Date.now(),
-          timestamp: new Date().toISOString(),
-          date: new Date().toLocaleDateString('es-ES', { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          }),
-          assignments: [...assignments],
-          draftOrder: assignments.length ? PEOPLE.join(", ") : peopleQueue.join(", ")
-        };
-        history.unshift(session); // Add to beginning
+        const history = await loadHistory();
+        session.id = Date.now();
+        history.unshift(session);
         // Keep only last 50 sessions
         const trimmed = history.slice(0, 50);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
@@ -648,22 +825,46 @@
         if(document.getElementById("historyView").classList.contains('active')){
           renderHistory();
         }
-        setStatus("Sesión guardada en el historial");
+        setStatus("Sesión guardada en el historial local");
       } catch(e){
         console.error('Error saving history:', e);
         setStatus("Error al guardar historial");
       }
     }
 
-    function clearHistory(){
-      if(confirm("¿Estás seguro de que quieres eliminar todo el historial?")){
-        localStorage.removeItem(STORAGE_KEY);
-        renderHistory();
-        setStatus("Historial limpiado");
-        // Switch back to assignments view if history is empty
-        if(loadHistory().length === 0){
-          switchView('assignments');
+    async function clearHistory(){
+      if(!confirm("¿Estás seguro de que quieres eliminar todo el historial?")){
+        return;
+      }
+
+      // Try Firebase first
+      if(checkFirebaseEnabled()){
+        try {
+          const sessionsRef = window.firebaseCollection(window.firebaseDb, HISTORY_COLLECTION);
+          const snapshot = await window.firebaseGetDocs(sessionsRef);
+          const deletePromises = [];
+          snapshot.forEach((doc) => {
+            deletePromises.push(window.firebaseDeleteDoc(window.firebaseDoc(window.firebaseDb, HISTORY_COLLECTION, doc.id)));
+          });
+          await Promise.all(deletePromises);
+          setStatus("Historial compartido limpiado");
+          renderHistory();
+          if((await loadHistory()).length === 0){
+            switchView('assignments');
+          }
+          return;
+        } catch(e){
+          console.error('Error clearing Firebase:', e);
+          alert("Error al limpiar Firebase, limpiando solo almacenamiento local");
         }
+      }
+
+      // Fallback to localStorage
+      localStorage.removeItem(STORAGE_KEY);
+      renderHistory();
+      setStatus("Historial local limpiado");
+      if((await loadHistory()).length === 0){
+        switchView('assignments');
       }
     }
 
@@ -690,8 +891,7 @@
       return stats;
     }
 
-    function renderHistory(){
-      const history = loadHistory();
+    function renderHistoryFromData(history){
       const historyListEl = document.getElementById("historyList");
       const historyStatsEl = document.getElementById("historyStats");
 
@@ -786,6 +986,11 @@
           }
         });
       });
+    }
+
+    async function renderHistory(){
+      const history = await loadHistory();
+      renderHistoryFromData(history);
     }
 
     // --- Canvas wheel drawing ---
@@ -1040,7 +1245,7 @@
     }
 
     // --- Navigation ---
-    function switchView(viewName){
+    async function switchView(viewName){
       // Update tabs
       document.querySelectorAll('.nav-tab').forEach(tab => {
         tab.classList.remove('active');
@@ -1057,13 +1262,14 @@
 
       // Refresh history if switching to history view
       if(viewName === 'history'){
-        renderHistory();
+        updateStorageStatus();
+        await renderHistory();
       }
     }
 
     // --- Export History ---
-    function exportHistory(){
-      const history = loadHistory();
+    async function exportHistory(){
+      const history = await loadHistory();
       if(history.length === 0){
         setStatus("No hay historial para exportar");
         return;
@@ -1090,9 +1296,53 @@
     const assignmentsTab = document.getElementById("assignmentsTab");
     const historyTab = document.getElementById("historyTab");
 
+    // Diagnostic function - can be called from browser console: checkFirebaseStatus()
+    window.checkFirebaseStatus = function(){
+      console.log('=== Firebase Diagnostic ===');
+      console.log('Firebase DB available:', !!window.firebaseDb);
+      console.log('Firebase Collection available:', !!window.firebaseCollection);
+      console.log('Firebase AddDoc available:', !!window.firebaseAddDoc);
+      console.log('checkFirebaseEnabled():', checkFirebaseEnabled());
+      console.log('firebaseEnabled flag:', firebaseEnabled);
+      
+      if(window.firebaseDb){
+        console.log('Firebase DB object:', window.firebaseDb);
+        console.log('Firebase app:', window.firebaseDb.app);
+      }
+      
+      // Test Firestore connection
+      if(checkFirebaseEnabled()){
+        console.log('Testing Firestore connection...');
+        const sessionsRef = window.firebaseCollection(window.firebaseDb, HISTORY_COLLECTION);
+        window.firebaseGetDocs(sessionsRef).then(snapshot => {
+          console.log('✓ Firestore connection successful! Found', snapshot.size, 'documents');
+        }).catch(error => {
+          console.error('✗ Firestore connection failed:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          if(error.code === 'permission-denied'){
+            console.error('⚠ PERMISSION DENIED - Check Firestore security rules!');
+            console.error('Go to Firebase Console → Firestore Database → Rules');
+            console.error('Make sure rules allow read/write access to "ruleta_sessions" collection');
+          }
+        });
+      } else {
+        console.warn('⚠ Firebase not initialized. Check browser console for module loading errors.');
+      }
+    };
+
     // Init
     reset();
-    renderHistory();
+    (async () => {
+      await initFirebaseListener();
+      await renderHistory();
+      // Run diagnostic after a short delay to allow Firebase to initialize
+      setTimeout(() => {
+        if(typeof window.checkFirebaseStatus === 'function'){
+          window.checkFirebaseStatus();
+        }
+      }, 1000);
+    })();
 
     // Event Listeners
     spinBtn.addEventListener("click", spinOnce);
