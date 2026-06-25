@@ -83,9 +83,33 @@
       display:grid;
       grid-template-columns: 1.1fr .9fr;
       gap: 18px;
+      align-items: stretch;
     }
     @media (max-width: 900px){
       .app{ grid-template-columns: 1fr; height: auto; }
+    }
+
+    .app > aside.card #assignments{
+      max-height: min(420px, calc(100vh - 300px));
+      overflow-y: auto;
+      padding-right: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,121,0,.4) rgba(11,62,96,.2);
+    }
+    .app > aside.card #assignments::-webkit-scrollbar{
+      width: 8px;
+    }
+    .app > aside.card #assignments::-webkit-scrollbar-track{
+      background: rgba(11,62,96,.2);
+      border-radius: 4px;
+    }
+    .app > aside.card #assignments::-webkit-scrollbar-thumb{
+      background: rgba(255,121,0,.4);
+      border-radius: 4px;
+      border: 1px solid rgba(255,121,0,.2);
+    }
+    .app > aside.card #assignments::-webkit-scrollbar-thumb:hover{
+      background: rgba(255,121,0,.6);
     }
 
     .card{
